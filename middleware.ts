@@ -17,8 +17,8 @@ export async function middleware(req: NextRequest) {
   }
 
   try {
-    // Check for demo session in headers (client-side will send this)
-    const demoSession = req.headers.get("x-demo-session")
+    // Check for demo session in localStorage (we'll handle this client-side)
+    // For middleware, we'll be more permissive
 
     // Create Supabase client
     const supabase = createMiddlewareClient({ req, res })
@@ -33,19 +33,21 @@ export async function middleware(req: NextRequest) {
     const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
 
     // Auth routes that should redirect if already authenticated
-    const authRoutes = ["/auth", "/login", "/signup"]
-    const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route))
+    const authRoutes = ["/auth"]
+    const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route) && pathname !== "/auth/reset-password")
 
-    if (isProtectedRoute) {
-      // Check for demo session or real session
-      if (!session && !demoSession) {
+    if (isProtectedRoute && !session) {
+      // Allow demo access by checking if it's a demo request
+      const isDemoRequest = req.headers.get("x-demo-session") === "true"
+
+      if (!isDemoRequest) {
         const redirectUrl = new URL("/auth", req.url)
         redirectUrl.searchParams.set("redirectTo", pathname)
         return NextResponse.redirect(redirectUrl)
       }
     }
 
-    if (isAuthRoute && (session || demoSession)) {
+    if (isAuthRoute && session) {
       // User is already authenticated, redirect to admin
       const redirectTo = req.nextUrl.searchParams.get("redirectTo") || "/admin"
       return NextResponse.redirect(new URL(redirectTo, req.url))
